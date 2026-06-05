@@ -1,18 +1,21 @@
 {
   "expo": {
-    "name": "MoodBullet",
-    "slug": "moodbullet",
+    "name": "emomo",
+    "slug": "emomo",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
-    "scheme": "moodbullet",
+    "userInterfaceStyle": "light",
+    "scheme": "emomo",
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.example.moodbullet"
+      "bundleIdentifier": "com.example.emomo",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "emomo 会用当前位置读取当地天气，并在打卡时保存天气快照。"
+      }
     },
     "android": {
-      "package": "com.example.moodbullet"
+      "package": "com.example.emomo"
     },
     "plugins": [
       [
