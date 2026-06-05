@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "MoodBullet",
+    "slug": "moodbullet",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "moodbullet",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.moodbullet"
+    },
+    "android": {
+      "package": "com.example.moodbullet"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#ffd447"
+        }
+      ]
+    ]
+  }
+}
