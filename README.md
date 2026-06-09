@@ -52,6 +52,23 @@ https://xpzoe.github.io/emomo/
 
 Add that URL to Supabase Auth URL configuration before using email login in production.
 
+## One-Tap Web Shortcuts
+
+The deployed web app supports direct mood capture URLs:
+
+```text
+https://xpzoe.github.io/emomo/?mood=happy
+https://xpzoe.github.io/emomo/?mood=angry
+https://xpzoe.github.io/emomo/?mood=sad
+https://xpzoe.github.io/emomo/?mood=down
+https://xpzoe.github.io/emomo/?mood=calm
+https://xpzoe.github.io/emomo/?mood=tired
+```
+
+Opening one of these URLs records that mood immediately, shows the saved animation, uploads to Supabase if signed in, and cleans the URL to avoid duplicate records on refresh.
+
+On iPhone, create a Shortcut with the action `Open URLs`, paste one of these URLs, then add the shortcut to the Home Screen.
+
 ## Supabase Sync In Expo
 
 Copy `.env.example` to `.env` and fill in:

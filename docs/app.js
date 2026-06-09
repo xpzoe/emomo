@@ -45,6 +45,7 @@ const state = {
   supabase: null,
   session: null,
   syncToast: "本地模式",
+  shortcutHandled: false,
 };
 
 const nodes = {
@@ -127,6 +128,32 @@ function createRecord(mood, x, y) {
   triggerParticles(x, y, mood.color);
   showSaved(mood.emoji);
   if (state.tab === "canvas") renderCanvas();
+}
+
+function findMoodByShortcut(value) {
+  if (!value) return null;
+  const normalized = decodeURIComponent(String(value)).trim().toLowerCase();
+  return MOODS.find((mood) => {
+    return mood.key === normalized || mood.label.toLowerCase() === normalized || mood.emoji === value;
+  }) || null;
+}
+
+function handleShortcutRecord() {
+  if (state.shortcutHandled) return false;
+
+  const params = new URLSearchParams(window.location.search);
+  const mood = findMoodByShortcut(params.get("mood"));
+  if (!mood) return false;
+
+  state.shortcutHandled = true;
+  createRecord(mood, window.innerWidth / 2, Math.min(window.innerHeight * 0.42, 420));
+  state.settingsToast = `已通过快捷入口记录：${mood.label}`;
+
+  params.delete("mood");
+  const rest = params.toString();
+  const cleanUrl = `${window.location.origin}${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`;
+  window.history.replaceState({}, document.title, cleanUrl);
+  return true;
 }
 
 function updateClock() {
@@ -488,7 +515,7 @@ function renderShortcutUrls() {
   MOODS.forEach((mood) => {
     const item = document.createElement("div");
     item.className = "shortcut-url";
-    item.textContent = `emomo://mood/${mood.key}`;
+    item.textContent = `${window.location.origin}${window.location.pathname}?mood=${mood.key}`;
     nodes.shortcutUrls.appendChild(item);
   });
 }
@@ -575,6 +602,7 @@ async function initSupabase() {
   }
 
   if (state.tab === "settings") renderSettings();
+  handleShortcutRecord();
 
   state.supabase.auth.onAuthStateChange(async (_event, session) => {
     state.session = session;
@@ -1044,4 +1072,6 @@ renderShortcutUrls();
 updateClock();
 window.setInterval(updateClock, 15_000);
 loadLocalWeather();
-initSupabase();
+initSupabase().then(() => {
+  handleShortcutRecord();
+});
