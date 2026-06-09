@@ -588,14 +588,34 @@ async function initSupabase() {
 async function completeAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
-  if (!code) return;
+  if (!code) {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    if (!accessToken || !refreshToken) return;
 
-  const { error } = await state.supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await state.supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) {
+      state.syncToast = `登录回跳失败：${error.message}`;
+      return;
+    }
+
+    state.session = data.session;
+    state.syncToast = "登录成功，正在同步。";
+    window.history.replaceState({}, document.title, getCleanRedirectUrl());
+    return;
+  }
+
+  const { data, error } = await state.supabase.auth.exchangeCodeForSession(code);
   if (error) {
     state.syncToast = `登录回跳失败：${error.message}`;
     return;
   }
 
+  state.session = data.session;
   state.syncToast = "登录成功，正在同步。";
   window.history.replaceState({}, document.title, getCleanRedirectUrl());
 }
