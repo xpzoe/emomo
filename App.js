@@ -1,3 +1,4 @@
+import 'react-native-url-polyfill/auto';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -16,6 +17,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
@@ -24,6 +27,18 @@ import * as Notifications from 'expo-notifications';
 const RECORD_FILE = `${FileSystem.documentDirectory}mood-records.json`;
 const RESET_MARKER_FILE = `${FileSystem.documentDirectory}records-reset-2026-06-05-weather.json`;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
 
 const MOODS = [
   { key: 'happy', emoji: '😊', label: '开心', detail: '开心/愉悦', color: '#ffd166' },
@@ -90,6 +105,11 @@ export default function App() {
   const [reminderMessage, setReminderMessage] = useState(DEFAULT_REMINDER_MESSAGE);
   const [recordsReady, setRecordsReady] = useState(false);
   const [weather, setWeather] = useState(null);
+  const [session, setSession] = useState(null);
+  const [syncEmail, setSyncEmail] = useState('');
+  const [syncToast, setSyncToast] = useState(
+    supabase ? 'Supabase ready. Sign in to sync.' : 'Supabase is not configured.'
+  );
   const weatherRef = useRef(null);
 
   useEffect(() => {
@@ -106,6 +126,56 @@ export default function App() {
   useEffect(() => {
     weatherRef.current = weather;
   }, [weather]);
+
+  const applyCloudSync = useCallback(async (activeSession) => {
+    if (!activeSession) {
+      setSyncToast('Sign in before syncing.');
+      return;
+    }
+
+    const result = await syncRecordsWithCloud(recordsRef.current, activeSession);
+    if (!result.ok) {
+      setSyncToast(result.message);
+      return;
+    }
+
+    recordsRef.current = result.records;
+    setRecords(result.records);
+    await saveRecords(result.records);
+    setSyncToast(result.message);
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session);
+      if (data.session) {
+        setSyncEmail(data.session.user.email || '');
+        setSyncToast(`Signed in: ${data.session.user.email || 'Supabase user'}`);
+        applyCloudSync(data.session);
+      }
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) {
+        setSyncEmail(nextSession.user.email || '');
+        setSyncToast(`Signed in: ${nextSession.user.email || 'Supabase user'}`);
+        applyCloudSync(nextSession);
+      } else {
+        setSyncToast('Signed out.');
+      }
+    });
+
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, [applyCloudSync]);
 
   useEffect(() => {
     let mounted = true;
@@ -136,17 +206,26 @@ export default function App() {
     recordsRef.current = nextRecords;
     setRecords(nextRecords);
     await saveRecords(nextRecords);
+    await pushRecordToCloud(nextRecord, session);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     setBurst({ id: nextRecord.id, x, y, color: mood.color });
     setSavedMood(mood);
     setTimeout(() => setSavedMood(null), 500);
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (!recordsReady) return undefined;
 
-    const handleUrl = (url) => {
+    const handleUrl = async (url) => {
+      const authSession = await completeSupabaseUrl(url);
+      if (authSession) {
+        setSession(authSession);
+        setSyncToast(`Signed in: ${authSession.user.email || 'Supabase user'}`);
+        applyCloudSync(authSession);
+        return;
+      }
+
       const mood = moodFromShortcutUrl(url);
       if (!mood) return;
       addRecord(mood, SCREEN_WIDTH / 2, 420);
@@ -162,7 +241,7 @@ export default function App() {
     });
 
     return () => subscription.remove();
-  }, [addRecord, recordsReady]);
+  }, [addRecord, applyCloudSync, recordsReady]);
 
   const toggleNotifications = useCallback(async () => {
     try {
@@ -176,6 +255,35 @@ export default function App() {
       setSettingsToast('提醒设置失败，请检查系统权限');
     }
   }, [reminderEnabled, reminderMessage, reminderTimes]);
+
+  const sendLoginLink = useCallback(async () => {
+    if (!supabase) {
+      setSyncToast('Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
+      return;
+    }
+
+    const email = syncEmail.trim();
+    if (!email) {
+      setSyncToast('Enter an email first.');
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: 'emomo://auth',
+      },
+    });
+
+    setSyncToast(error ? `Login link failed: ${error.message}` : 'Login link sent. Open it on this iPhone.');
+  }, [syncEmail]);
+
+  const signOut = useCallback(async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setSession(null);
+    setSyncToast('Signed out.');
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -200,6 +308,13 @@ export default function App() {
             setReminderTimes={setReminderTimes}
             setReminderMessage={setReminderMessage}
             onToggleNotifications={toggleNotifications}
+            session={session}
+            syncEmail={syncEmail}
+            syncToast={syncToast}
+            setSyncEmail={setSyncEmail}
+            onSendLoginLink={sendLoginLink}
+            onSignOut={signOut}
+            onSyncNow={() => applyCloudSync(session)}
           />
         )}
       </View>
@@ -572,6 +687,13 @@ function SettingsScreen({
   setReminderTimes,
   setReminderMessage,
   onToggleNotifications,
+  session,
+  syncEmail,
+  syncToast,
+  setSyncEmail,
+  onSendLoginLink,
+  onSignOut,
+  onSyncNow,
 }) {
   return (
     <ScrollView style={styles.canvas} contentContainerStyle={styles.canvasContent}>
@@ -591,8 +713,70 @@ function SettingsScreen({
         onToggleNotifications={onToggleNotifications}
       />
       {settingsToast ? <Text style={styles.detailBox}>{settingsToast}</Text> : null}
+      <SupabasePanel
+        session={session}
+        syncEmail={syncEmail}
+        syncToast={syncToast}
+        setSyncEmail={setSyncEmail}
+        onSendLoginLink={onSendLoginLink}
+        onSignOut={onSignOut}
+        onSyncNow={onSyncNow}
+      />
       <ShortcutPanel />
     </ScrollView>
+  );
+}
+
+function SupabasePanel({
+  session,
+  syncEmail,
+  syncToast,
+  setSyncEmail,
+  onSendLoginLink,
+  onSignOut,
+  onSyncNow,
+}) {
+  return (
+    <View style={styles.reminderPanel}>
+      <View style={styles.panelHeader}>
+        <View>
+          <Text style={styles.panelKicker}>SYNC</Text>
+          <Text style={styles.panelTitle}>Supabase cloud sync</Text>
+        </View>
+        <Pressable style={({ pressed }) => [styles.panelAction, pressed && styles.quickButtonPressed]} onPress={onSyncNow}>
+          <Text style={styles.panelActionText}>Sync</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.syncStatus}>{syncToast}</Text>
+      {session ? (
+        <View style={styles.syncActions}>
+          <Text style={styles.shortcutText}>Signed in as {session.user.email || 'Supabase user'}</Text>
+          <Pressable style={({ pressed }) => [styles.ghostAction, pressed && styles.quickButtonPressed]} onPress={onSignOut}>
+            <Text style={styles.ghostActionText}>Sign out</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <View style={styles.messageEditor}>
+            <Text style={styles.timeLabel}>Email</Text>
+            <TextInput
+              style={styles.messageInput}
+              value={syncEmail}
+              onChangeText={setSyncEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              placeholder="you@example.com"
+              placeholderTextColor="#b28da0"
+            />
+          </View>
+          <Pressable style={({ pressed }) => [styles.panelAction, pressed && styles.quickButtonPressed]} onPress={onSendLoginLink}>
+            <Text style={styles.panelActionText}>Send login link</Text>
+          </Pressable>
+        </>
+      )}
+    </View>
   );
 }
 
@@ -725,6 +909,102 @@ async function loadRecords() {
 
 async function saveRecords(records) {
   await FileSystem.writeAsStringAsync(RECORD_FILE, JSON.stringify(records, null, 2));
+}
+
+async function syncRecordsWithCloud(localRecords, session) {
+  if (!supabase || !session) {
+    return { ok: false, message: 'Supabase is not configured or signed in.', records: localRecords };
+  }
+
+  const userId = session.user.id;
+  const rows = localRecords.map((record) => ({
+    id: String(record.id),
+    user_id: userId,
+    timestamp: record.timestamp,
+    emoji: record.emoji,
+    tag: record.tag || '',
+    weather: record.weather || null,
+  }));
+
+  if (rows.length) {
+    const { error } = await supabase.from('mood_records').upsert(rows, { onConflict: 'id' });
+    if (error) return { ok: false, message: `Upload failed: ${error.message}`, records: localRecords };
+  }
+
+  const { data, error } = await supabase
+    .from('mood_records')
+    .select('id,timestamp,emoji,tag,weather')
+    .order('timestamp', { ascending: true });
+
+  if (error) return { ok: false, message: `Download failed: ${error.message}`, records: localRecords };
+
+  const records = mergeRecords(localRecords, data || []);
+  return { ok: true, message: `Synced ${records.length} records.`, records };
+}
+
+async function pushRecordToCloud(record, session) {
+  if (!supabase || !session) return;
+
+  const { error } = await supabase.from('mood_records').upsert(
+    {
+      id: String(record.id),
+      user_id: session.user.id,
+      timestamp: record.timestamp,
+      emoji: record.emoji,
+      tag: record.tag || '',
+      weather: record.weather || null,
+    },
+    { onConflict: 'id' }
+  );
+
+  if (error) {
+    console.warn('Supabase record upload failed:', error.message);
+  }
+}
+
+function mergeRecords(localRecords, remoteRecords) {
+  const map = new Map();
+  [...localRecords, ...remoteRecords].forEach((record) => {
+    map.set(String(record.id), {
+      id: String(record.id),
+      timestamp: Number(record.timestamp),
+      emoji: record.emoji,
+      tag: record.tag || '',
+      weather: record.weather || null,
+    });
+  });
+  return [...map.values()].sort((a, b) => a.timestamp - b.timestamp);
+}
+
+async function completeSupabaseUrl(url) {
+  if (!supabase || !url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const code = parsed.searchParams.get('code');
+    if (code) {
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+      return data.session;
+    }
+
+    const hash = parsed.hash?.replace(/^#/, '');
+    const hashParams = new URLSearchParams(hash);
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    if (accessToken && refreshToken) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) throw error;
+      return data.session;
+    }
+  } catch (error) {
+    console.warn('Supabase auth URL handling failed:', error.message);
+  }
+
+  return null;
 }
 
 async function loadLocalWeather() {
@@ -1409,6 +1689,34 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '900',
+  },
+  ghostAction: {
+    minHeight: 38,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff0f7',
+    borderWidth: 1,
+    borderColor: '#f4cfe0',
+  },
+  ghostActionText: {
+    color: '#9b7f8f',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  syncStatus: {
+    color: '#6e5a66',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#fff0f7',
+  },
+  syncActions: {
+    gap: 10,
   },
   timeRow: {
     flexDirection: 'row',

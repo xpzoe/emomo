@@ -10,6 +10,8 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@supabase/supabase-js": "^2.108.0",
     "expo": "~54.0.0",
     "expo-camera": "~17.0.10",
     "expo-file-system": "~19.0.21",
@@ -19,7 +21,8 @@
     "expo-media-library": "~18.2.1",
     "expo-notifications": "~0.32.16",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-url-polyfill": "^3.0.0"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.0"

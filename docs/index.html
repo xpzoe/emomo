@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff7fb" />
+    <title>emomo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <button class="brand" type="button" data-tab="capture" aria-label="打开记录页">
+          <span class="brand-mark">em</span>
+          <span>emomo</span>
+        </button>
+        <nav class="tabs" aria-label="主导航">
+          <button class="tab active" type="button" data-tab="capture">记录</button>
+          <button class="tab" type="button" data-tab="canvas">画布</button>
+          <button class="tab" type="button" data-tab="settings">设置</button>
+        </nav>
+      </header>
+
+      <main>
+        <section class="screen capture-screen active" id="captureScreen">
+          <p class="time-chip" id="clock">--:--</p>
+          <h1>现在是什么情绪？</h1>
+          <div class="mood-grid" id="moodGrid"></div>
+        </section>
+
+        <section class="screen canvas-screen" id="canvasScreen">
+          <div class="page-title">
+            <p class="kicker" id="rangeKicker">过去 30天</p>
+            <h2>情绪像素画布</h2>
+          </div>
+
+          <div class="range-summary" id="rangeSummary"></div>
+          <div class="analysis-card" id="moodWeatherCard"></div>
+          <div class="weather-card" id="weatherCard"></div>
+
+          <div class="range-tabs" id="rangeTabs"></div>
+          <div class="stats-grid" id="statsGrid"></div>
+
+          <div class="heatmap-panel">
+            <div class="calendar-scroll">
+              <div class="month-row" id="monthRow"></div>
+              <div class="calendar-row">
+                <div class="weekday-labels">
+                  <span>一</span>
+                  <span>二</span>
+                  <span>三</span>
+                  <span>四</span>
+                  <span>五</span>
+                  <span>六</span>
+                  <span>日</span>
+                </div>
+                <div class="weeks" id="weeks"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-box" id="detailBox">点击一个格子查看当天所有记录</div>
+          <section class="timeline-panel">
+            <h3>最近记录</h3>
+            <div id="recentTimeline"></div>
+          </section>
+          <section class="quick-rail">
+            <h3>快捷记录</h3>
+            <div class="quick-buttons" id="quickButtons"></div>
+          </section>
+        </section>
+
+        <section class="screen settings-screen" id="settingsScreen">
+          <div class="page-title">
+            <p class="kicker">偏好</p>
+            <h2>设置</h2>
+          </div>
+
+          <section class="settings-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">提醒</p>
+                <h3>自定义打卡时间</h3>
+              </div>
+              <label class="switch">
+                <input id="reminderEnabled" type="checkbox" />
+                <span></span>
+              </label>
+            </div>
+
+            <div id="reminderControls"></div>
+          </section>
+
+          <div class="detail-box settings-toast" id="settingsToast">打开提醒后，可以设置时间和提示语。</div>
+
+          <section class="settings-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">同步</p>
+                <h3>Supabase 云同步</h3>
+              </div>
+              <button class="panel-action" id="syncNowButton" type="button">同步</button>
+            </div>
+            <div class="sync-status" id="syncStatus">本地模式</div>
+            <div class="sync-status sync-url" id="syncUrl"></div>
+            <div class="message-editor">
+              <label class="time-label" for="emailInput">邮箱</label>
+              <input id="emailInput" class="message-input single-line" type="email" placeholder="you@example.com" />
+            </div>
+            <div class="sync-actions">
+              <button class="panel-action" id="loginButton" type="button">发送登录链接</button>
+              <button class="ghost-action" id="logoutButton" type="button">退出</button>
+            </div>
+          </section>
+
+          <section class="shortcut-panel">
+            <h3>快捷指令接口</h3>
+            <p>在 iOS 快捷指令里使用“打开 URL”，填入下面任意一个地址。</p>
+            <div id="shortcutUrls"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="particle-layer" id="particleLayer" aria-hidden="true"></div>
+    <div class="saved-overlay" id="savedOverlay" aria-live="polite">
+      <div>
+        <div class="saved-emoji" id="savedEmoji">😊</div>
+        <div class="saved-text">已记录</div>
+      </div>
+    </div>
+
+    <script src="./supabase-config.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
