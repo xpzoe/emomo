@@ -1071,6 +1071,7 @@ renderMoodButtons();
 renderShortcutUrls();
 updateClock();
 window.setInterval(updateClock, 15_000);
+handleShortcutRecord();
 loadLocalWeather();
 initSupabase().then(() => {
   handleShortcutRecord();
